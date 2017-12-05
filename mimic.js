@@ -21,6 +21,7 @@ detector.detectAllAppearance();
 
 // Unicode values for all emojis Affectiva can detect
 var emojis = [ 128528, 9786, 128515, 128524, 128527, 128521, 128535, 128539, 128540, 128542, 128545, 128563, 128561 ];
+// var emojis = [ 128528, 128515, 128527, 128521, 128535, 128539, 128540, 128545, 128563, 128561 ];
 
 // Update target emoji being displayed by supplying a unicode value
 function setTargetEmoji(code) {
@@ -53,6 +54,8 @@ function onStart() {
     detector.start();  // start detector
   }
   log('#logs', "Start button pressed");
+    
+  game.init();
 }
 
 // Stop button
@@ -62,6 +65,8 @@ function onStop() {
     detector.removeEventListener();
     detector.stop();  // stop detector
   }
+    
+  game.stop();
 };
 
 // Reset button
@@ -74,7 +79,7 @@ function onReset() {
   $("#logs").html("");  // clear out previous log
 
   // TODO(optional): You can restart the game as well
-  // <your code here>
+  game.init();
 };
 
 // Add a callback to notify when camera access is allowed
@@ -102,7 +107,7 @@ detector.addEventListener("onInitializeSuccess", function() {
   $("#face_video").css("display", "none");
 
   // TODO(optional): Call a function to initialize the game, if needed
-  // <your code here>
+  game.start();
 });
 
 // Add a callback to receive the results from processing an image
@@ -133,7 +138,8 @@ detector.addEventListener("onImageResultsSuccess", function(faces, image, timest
     drawEmoji(canvas, image, faces[0]);
 
     // TODO: Call your function to run the game (define it first!)
-    // <your code here>
+    //if (!game.isRunning()) game.start();
+    game.update(faces[0].emojis.dominantEmoji);
   }
 });
 
@@ -147,7 +153,7 @@ function drawFeaturePoints(canvas, img, face) {
 
   // TODO: Set the stroke and/or fill style you want for each feature point marker
   // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D#Fill_and_stroke_styles
-  // <your code here>
+  ctx.strokeStyle = 'white';
   
   // Loop over each feature point in the face
   for (var id in face.featurePoints) {
@@ -155,7 +161,9 @@ function drawFeaturePoints(canvas, img, face) {
 
     // TODO: Draw feature point, e.g. as a circle using ctx.arc()
     // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
-    // <your code here>
+    ctx.beginPath();
+    ctx.arc(featurePoint.x, featurePoint.y, 2, 0, 2 * Math.PI);
+    ctx.stroke();
   }
 }
 
@@ -165,12 +173,19 @@ function drawEmoji(canvas, img, face) {
   var ctx = canvas.getContext('2d');
 
   // TODO: Set the font and style you want for the emoji
-  // <your code here>
+  ctx.font = "48pt Arial, sans-serif"
   
   // TODO: Draw it using ctx.strokeText() or fillText()
   // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillText
   // TIP: Pick a particular feature point as an anchor so that the emoji sticks to your face
-  // <your code here>
+  var anchor_x = -1, anchor_y = 65536;
+  for (var id in face.featurePoints) {
+    var featurePoint = face.featurePoints[id];
+    anchor_x = Math.max(anchor_x, featurePoint.x);
+    anchor_y = Math.min(anchor_y, featurePoint.y);
+  }
+  
+  ctx.fillText(face.emojis.dominantEmoji, anchor_x, anchor_y);
 }
 
 // TODO: Define any variables and functions to implement the Mimic Me! game mechanics
@@ -186,4 +201,83 @@ function drawEmoji(canvas, img, face) {
 // - Define an initialization/reset function, and call it from the "onInitializeSuccess" event handler above
 // - Define a game reset function (same as init?), and call it from the onReset() function above
 
-// <your code here>
+function Game() {
+    var self = this;
+    self.correct = 0;
+    self.total = 0;
+    self.timerID = 0;
+    self.target = -1;
+    
+    self.setTarget = function(target) {
+        self.target = target;
+        if (target != -1) {
+            setTargetEmoji(target);
+            self.total += 1;
+        } else {
+            $("#target").html("?");
+        }
+        setScore(self.correct, self.total);
+    }
+    
+    self.init = function() {
+        self.correct = 0;
+        self.total = 0;
+        setScore(self.correct, self.total);
+        self.stop();
+    }
+    
+    self.idx = 0;
+    
+    self.newTarget = function() {
+        let idx = Math.floor(Math.random() * emojis.length);
+        self.setTarget(emojis[idx]);
+//        self.idx += 1;
+//        if (self.idx == emojis.length) self.idx = 0;
+//        self.setTarget(emojis[self.idx]);
+    }
+    
+    self.start = function() {
+        if (self.timerID == 0) {
+            self.newTarget();
+            self.timerID = setInterval(self.newTarget, 3000);
+        }
+    }
+    
+    self.isRunning = function() {
+        return self.timerID != 0;
+    }
+    
+    self.update = function(dominantEmoji) {
+        if (self.isRunning()) {
+            if (toUnicode(dominantEmoji) == self.target) {
+//                console.log({
+//                    "dominant": toUnicode(dominantEmoji),
+//                    "target": self.target,
+//                    "id": self.timerID,
+//                    "correct": self.correct,
+//                    "total": self.total
+//                });
+                
+                self.target = -1;
+                
+                clearInterval(self.timerID);
+                self.timerID = 0;
+                
+                self.correct += 1;
+                setScore(self.correct, self.total);
+                
+                self.start();
+            }
+        }
+    }
+    
+    self.stop = function() {
+        if (self.timerID != 0) {
+            clearInterval(self.timerID);
+            self.timerID = 0;
+        }
+        self.setTarget(-1);
+    }
+}
+
+var game = new Game();
